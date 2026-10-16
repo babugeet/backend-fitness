@@ -1,0 +1,89 @@
+// package main
+
+// import (
+// 	"jwt-auth/handler"
+// 	"log"
+// 	"net/http"
+// )
+
+// func main() {
+
+// 	http.HandleFunc("/login", handler.Login)
+// 	http.HandleFunc("/signup", handler.Signup)
+// 	http.HandleFunc("/home", handler.Home)       //Protected
+// 	http.HandleFunc("/refresh", handler.Refresh) //Protected
+// 	log.Fatal(http.ListenAndServe(":8080", nil))
+// }
+
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+
+	"jwt-auth/db"
+	"jwt-auth/handler" // Replace with your actual module name
+	"jwt-auth/utils"
+
+	"github.com/rs/cors"
+)
+
+func main() {
+	if os.Getenv("JWT_SECRET") == "" {
+		log.Fatal("JWT_SECRET environment variable is required")
+	}
+	fmt.Println(
+		"Hello, Welcome to the server",
+	)
+	mux := http.NewServeMux()
+	pgdb := db.NewMydb()
+	// defer pgdb
+	fmt.Println(
+		"Hello, Welcomesssse to the server",
+	)
+	// Define your route handlers
+	mux.HandleFunc("/login", handler.Login(pgdb))
+	mux.HandleFunc("/signup", handler.Signup(pgdb))
+	mux.HandleFunc("/home", utils.AuthMiddleware((handler.Home)))
+	// Protected
+	mux.HandleFunc("/refresh", handler.Refresh) // Protected
+	mux.HandleFunc("/check-auth", utils.AuthMiddleware(handler.CheckAuth))
+	mux.HandleFunc("/getuser/{id}", utils.AuthMiddleware(handler.GetUserById(pgdb)))
+	mux.HandleFunc("/getuser/{id}/workoutplan", utils.AuthMiddleware(handler.GetUserWorkOutPlan(pgdb)))
+	mux.HandleFunc("/getuser/{id}/cardioplan", utils.AuthMiddleware(handler.GetUserCardioPlan(pgdb)))
+	mux.HandleFunc("/getuser/{id}/dietplan", utils.AuthMiddleware(handler.GetUserDietPlan(pgdb)))
+	mux.HandleFunc("/userinput/{id}", utils.AuthMiddleware(handler.GetUserInput(pgdb)))
+	mux.HandleFunc("/userdailydata/{id}", utils.AuthMiddleware(handler.GetUserDailyData(pgdb)))
+	mux.HandleFunc("/userdailydata/{id}/{date}", utils.AuthMiddleware(handler.GetUserDailyDatabyDate(pgdb)))
+	mux.HandleFunc("/userdailydatatarget/{id}", utils.AuthMiddleware(handler.GetUserDailyDataTargetData(pgdb)))
+	mux.HandleFunc("/userdailydatatarget/{id}/{date}", utils.AuthMiddleware(handler.GetUserDailyDataTargetDatabyDate(pgdb)))
+
+	// Set up CORS
+	allowedOrigins := strings.Split(envOrDefault("CORS_ALLOWED_ORIGINS", "http://localhost:8081,http://127.0.0.1:8081"), ",")
+	c := cors.New(cors.Options{
+		AllowedOrigins:      allowedOrigins,
+		AllowedMethods:      []string{"GET", "POST", "OPTIONS"},
+		AllowedHeaders:      []string{"*"},
+		ExposedHeaders:      []string{"*"},
+		AllowPrivateNetwork: true,
+		AllowCredentials:    false,
+		// OptionsPassthrough: true,
+		Debug: true,
+	})
+
+	// Wrap your router with the CORS handler
+	handler := c.Handler(mux)
+
+	// Start the server
+	log.Fatal(http.ListenAndServe(":8080", handler))
+}
+
+func envOrDefault(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
